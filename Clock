@@ -1,0 +1,114 @@
+using System;
+using System.Threading;
+
+namespace Events
+{
+    public delegate void TimeChangeHandler(
+            object clock,
+            TimeInfoEventArgs timeInformation
+        );
+
+    public class TimeInfoEventArgs : EventArgs
+    {
+        public readonly int Hour;
+        public readonly int Minute;
+        public readonly int Second;
+
+        public TimeInfoEventArgs(int hour, int minute, int second)
+        {
+            Hour = hour;
+            Minute = minute;
+            Second = second;
+        }
+    }
+
+    public interface IClockEventListening
+    {
+        event TimeChangeHandler OnSecondChanged;
+    }
+
+    public class Clock: IClockEventListening
+    {
+        private DateTime _time;
+        
+        public event TimeChangeHandler OnSecondChanged;
+
+        protected void SecondChanged(
+           object clock,
+           TimeInfoEventArgs timeInformation
+        )
+        {
+            OnSecondChanged?.Invoke(clock, timeInformation);
+        }
+
+        public void Run()
+        {
+            _time = DateTime.Now;
+
+            for (;;)
+            {
+                Thread.Sleep(1000);
+
+                _time = _time.AddSeconds(1);
+
+                TimeInfoEventArgs timeInformation =
+                   new TimeInfoEventArgs(
+                   _time.Hour, _time.Minute, _time.Second);
+
+                SecondChanged(this, timeInformation);
+            }
+        }
+    }
+ 
+    public class DisplayClock
+    {
+        public void Subscribe(IClockEventListening theClock)
+        {
+            theClock.OnSecondChanged +=
+               new TimeChangeHandler(TimeHasChanged);
+        }
+
+        private void TimeHasChanged(
+           object sender, TimeInfoEventArgs e)
+        {
+            Console.WriteLine("Current Time: {0}:{1}:{2}",
+               e.Hour.ToString(),
+               e.Minute.ToString(),
+               e.Second.ToString());
+        }
+    }
+    
+    public class LogClock
+    {
+        public void Subscribe(IClockEventListening theClock)
+        {
+            theClock.OnSecondChanged +=
+               new TimeChangeHandler(WriteLogEntry);
+        }
+        
+        private void WriteLogEntry(
+           object sender, TimeInfoEventArgs e)
+        {
+            Console.WriteLine("Logging to file: {0}:{1}:{2}",
+               e.Hour.ToString(),
+               e.Minute.ToString(),
+               e.Second.ToString());
+        }
+    }
+    
+    public class Test
+    {
+        public static void Main()
+        {
+            Clock theClock = new Clock();
+            
+            DisplayClock dc = new DisplayClock();
+            dc.Subscribe(theClock);
+            
+            LogClock lc = new LogClock();
+            lc.Subscribe(theClock);
+            
+            theClock.Run();
+        }
+    }
+}
